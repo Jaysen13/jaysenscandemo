@@ -1,0 +1,38 @@
+server:
+  port: 80
+spring:
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  application:
+    name: JaySenScanDemo
+  datasource:
+    # 数据库配置
+    url: jdbc:mysql://localhost:3306/jaysendemo?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # Druid配置
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 初始化连接数
+      initial-size: 5
+      # 最大连接数
+      max-active: 20
+      # 最小空闲连接数
+      min-idle: 5
+      # 连接超时时间（毫秒）
+      max-wait: 60000
+      # 监控配置
+      stat-view-servlet:
+        enabled: true          # 开启监控页面
+        login-username: admin  # 监控页面登录用户名
+        login-password: 123456 # 监控页面登录密码
+        url-pattern: /druid/*  # 监控页面访问路径
+      # 过滤配置（监控SQL执行）
+      filter:
+        stat:
+          enabled: true        # 开启SQL监控
+          log-slow-sql: true   # 记录慢SQL
+          slow-sql-millis: 2000 # 慢SQL阈值（毫秒）
